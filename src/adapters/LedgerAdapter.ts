@@ -10,7 +10,7 @@ export class LedgerAdapter extends Adapter {
     private _currentUser;
     public static type = AdapterType.Ledger;
     //@ts-ignore
-    private static _ledger;
+    private static _ledger: WavesLedger;
     //@ts-ignore
     private static _hasConnectionPromise;
 
@@ -31,6 +31,14 @@ export class LedgerAdapter extends Adapter {
         return this._isMyLedger();
     }
 
+    public getSyncAddress(): string {
+        return this._currentUser.address;
+    }
+
+    public getSyncPublicKey(): string {
+        return this._currentUser.publicKey;
+    }
+
     public getPublicKey() {
         return Promise.resolve(this._currentUser.publicKey);
     }
@@ -49,31 +57,44 @@ export class LedgerAdapter extends Adapter {
 
     public signRequest(bytes: Uint8Array): Promise<string> {
         return  this._isMyLedger()
-            .then(() => LedgerAdapter._ledger.signRequest(this._currentUser.id, bytes));
+            .then(() => LedgerAdapter._ledger.signRequest(this._currentUser.id, { dataBuffer: bytes }));
     }
 
-    public signTransaction(bytes: Uint8Array, amountPrecision: number): Promise<string> {
+    public signTransaction(bytes: Uint8Array, precision: Record<string, number>, signData: any): Promise<string> {
         if (bytes[0] === 15) {
             return this.signData(bytes);
         }
         return this._isMyLedger()
-            .then(() => LedgerAdapter._ledger.signTransaction(this._currentUser.id, {precision: amountPrecision}, bytes));
+            .then(() => LedgerAdapter._ledger.signTransaction(
+                this._currentUser.id, {
+                    amount2Precision: precision.amount2Precision,
+                    amountPrecision: precision.amountPrecision,
+                    feePrecision: precision.feePrecision,
+                    dataType: signData.type,
+                    dataVersion: signData.data.version,
+                    dataBuffer: bytes
+                }));
     }
 
-    public signOrder(bytes: Uint8Array, amountPrecision: number): Promise<string> {
+    public signOrder(bytes: Uint8Array, precision: Record<string, number>, data: any): Promise<string> {
         return this._isMyLedger()
-            .then(() => LedgerAdapter._ledger.signOrder(this._currentUser.id, {precision: amountPrecision}, bytes));
+            .then(() => LedgerAdapter._ledger.signOrder(this._currentUser.id, {
+                dataBuffer: bytes,
+                amountPrecision: precision.amountPrecision,
+                feePrecision: precision.feePrecision,
+                dataVersion: data.data.version
+            }));
     }
 
     public signData(bytes: Uint8Array): Promise<string> {
         return this._isMyLedger()
-            .then(() => LedgerAdapter._ledger.signSomeData(this._currentUser.id, bytes));
+            .then(() => LedgerAdapter._ledger.signSomeData(this._currentUser.id, { dataBuffer: bytes }));
     }
-    
+
     public getEncodedSeed() {
         return Promise.reject(Error('Method "getEncodedSeed" is not available!'));
     }
-    
+
     public getPrivateKey() {
         return Promise.reject('No private key');
     }
@@ -99,7 +120,8 @@ export class LedgerAdapter extends Adapter {
             [SIGN_TYPE.SET_SCRIPT]: [1],
             [SIGN_TYPE.SPONSORSHIP]: [1],
             [SIGN_TYPE.SET_ASSET_SCRIPT]: [1],
-            [SIGN_TYPE.SCRIPT_INVOCATION]: [1]
+            [SIGN_TYPE.SCRIPT_INVOCATION]: [1],
+            [SIGN_TYPE.UPDATE_ASSET_INFO]: [1],
         };
     }
 
@@ -112,16 +134,16 @@ export class LedgerAdapter extends Adapter {
                     throw {error: 'Invalid ledger'};
                 }
             });
-        
+
         promise.catch((e: any) => {
             console.warn(e);
         });
-        
+
         return promise;
     }
 
-    public static getUserList(from: Number = 1, to: Number = 1) {
-        return LedgerAdapter._ledger.getPaginationUsersData(from, to);
+    public static getUserList(from: number = 1, to: number = 1) {
+        return LedgerAdapter._ledger.getPaginationUsersData(from, to) as any;
     }
 
     public static initOptions(options: IWavesLedger) {
